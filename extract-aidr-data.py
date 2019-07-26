@@ -1,4 +1,7 @@
-import csv, dateutil.parser, dateutil.relativedelta, json, re, sys
+import csv, dateutil.parser, dateutil.relativedelta, json, logging, re, sys
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("extract-aidr-data")
 
 #
 # Utility functions
@@ -40,9 +43,15 @@ output.writerow([
     'Location string'
 ])
 
+# each line is a JSON record
 for line in sys.stdin:
-    # each line is a JSON record
     record = json.loads(line)
+    
+    # If no label info, skip
+    if 'aidr' not in record or 'nominal_labels' not in record['aidr']:
+        logger.warning("Skipping tweet %s with no label information", record.get('id_str'))
+        continue
+
     label = record['aidr']['nominal_labels'][0]['label_code']
     if label == 'related_to_education_insecurity':
         date_string = clean(record['created_at'])
