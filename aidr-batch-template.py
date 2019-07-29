@@ -24,8 +24,9 @@ for line in sys.stdin:
     # parse the JSON
     record = json.loads(line)
 
+    # extract some fields from the JSON
     date = record.get('created_at', '')
     lang = record.get('lang', '')
 
-    # write data out to CSV
+    # write a data row out to the CSV
     output.writerow([date, lang])
