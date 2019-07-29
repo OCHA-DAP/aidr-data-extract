@@ -34,7 +34,9 @@ def get_week_start (date_string):
 # Main processing loop
 #
 output = csv.writer(sys.stdout)
-language_string = 'fr' # need to change for other languages
+language_string = 'en' # need to change for other languages
+skipped_count = 0
+total_count = 0
 
 # write the CSV header row
 output.writerow([
@@ -45,11 +47,15 @@ output.writerow([
 
 # each line is a JSON record
 for line in sys.stdin:
-    record = json.loads(line)
+    if total_count > 0 and (total_count % 10000) == 0:
+        logger.info("Read %d tweets (%d skipped)...", total_count, skipped_count)
     
+    record = json.loads(line)
+    total_count += 1
+
     # If no label info, skip
     if 'aidr' not in record or 'nominal_labels' not in record['aidr']:
-        logger.warning("Skipping tweet %s with no label information", record.get('id_str'))
+        skipped_count += 1
         continue
 
     label = record['aidr']['nominal_labels'][0]['label_code']
@@ -61,3 +67,7 @@ for line in sys.stdin:
             language_string,
             location_string
         ])
+
+logger.info("Read %d total tweets", total_count)
+if skipped_count > 0:
+    logger.warn("Skipped %d tweets with no label information", skipped_count)
