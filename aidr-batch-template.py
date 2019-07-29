@@ -14,8 +14,7 @@ output = csv.writer(sys.stdout)
 # write the CSV header row
 output.writerow([
     'Date',
-    'Language',
-    'Location string'
+    'Language'
 ])
 
 # read one line at a time from standard input
