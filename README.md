@@ -1,5 +1,5 @@
-AIDR data parser
-================
+AIDR data tools
+===============
 
 Extract tweet-analysis data from AIDR's JSON output format into a spreadsheet.
 
@@ -7,8 +7,11 @@ The AIDR data is arranged with one JSON object on each line. This library reads 
 
 # Requirements
 
-* Python 3
-* python-dateutil library
+This package requires Python3 along with the following Python packages:
+
+* geocoder
+* hxl
+* python-dateutil
 
 # Installation
 
@@ -16,5 +19,19 @@ The AIDR data is arranged with one JSON object on each line. This library reads 
 
 # Usage
 
+## Extract data to a HXL-hashtagged CSV file
+
     $ python3 extract-aidr-data.py < source.txt.json > output.csv
+
+## Geocode extracted tweets
+
+    $ # TODO
+
+## Create a report
+
+    $ # TODO
+
+# License
+
+This package is in the Public Domain and comes with NO WARRANTY.
 
