@@ -49,6 +49,7 @@ def get_week_start (date_object):
 output = csv.writer(sys.stdout)
 skipped_count = 0
 total_count = 0
+tweet_ids_seen = set()
 
 #
 # write the CSV header rows (text headers and HXL hashtags)
@@ -83,6 +84,13 @@ for line in sys.stdin:
     # parse the JSON
     record = json.loads(line)
     total_count += 1
+
+    # check that we haven't see this already (in this run)
+    if record['id'] in tweet_ids_seen:
+        skipped_count += 1
+        continue
+    else:
+        tweet_ids_seen.add(record['id'])
 
     # If no label info, skip
     if 'aidr' not in record or 'nominal_labels' not in record['aidr']:
