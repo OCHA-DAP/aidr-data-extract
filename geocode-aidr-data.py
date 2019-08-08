@@ -52,11 +52,14 @@ def write_location_cache(filename, cache):
 def geocode_location_string(s):
     """Attempt to geocode a location string"""
     time.sleep(1)
-    g = geocoder.osm(s)
-    if g.accuracy is not None and g.accuracy >= ACCURACY_THRESHOLD and g.country_code:
-        return g.country_code
-    else:
-        return ''
+    try:
+        g = geocoder.osm(s)
+        if g.accuracy is not None and g.accuracy >= ACCURACY_THRESHOLD and g.country_code:
+            return g.country_code
+    except Exception as (e):
+        logger.exception(e)
+
+    return '' # insufficient accuracy or exception
 
 def do_geocode(input_stream, output_stream, location_cache):
 
