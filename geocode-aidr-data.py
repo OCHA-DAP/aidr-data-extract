@@ -3,6 +3,12 @@
 This script expects the input data to be in a HXL-hashtagged CSV file, with
 columns matching the hashtag patterns #loc and #country+code+v_iso2
 
+Usage:
+
+    python geocode-aidr-data --cache-in=old-cache.csv --cache-out=new-cache.csv --output=tweets-geocoded.csv tweets-raw.csv
+
+It's important to preserve a cache between runs, to avoid extra calls to the OSM API.
+
 """
 
 import argparse, csv, geocoder, hxl, json, logging, re, sys, time
@@ -13,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 WHITESPACE_PATTERN = re.compile('\s+', re.MULTILINE)
 """Regular-expression pattern for multi-line whitespace."""
 
-ACCURACY_THRESHOLD = 0.5
+ACCURACY_THRESHOLD = 0.8 # require 80% confidence
 
 
 def normalise_string(s):
