@@ -25,11 +25,21 @@ This package requires Python3 along with the following Python packages:
 
 ## Geocode extracted tweets
 
-    $ # TODO
+    $ python3 geocode-aidr-data.py --cache-in=old-cache.csv --cache-out=new-cache.csv --output=tweets-geocoded.csv tweets-raw.csv
 
-## Create a report
+## Create reports (using libhxl)
 
-    $ # TODO
+Total tweets by day and language:
+
+    $ hxlcount -t date+posted,meta+lang tweets.csv > report.csv
+
+Total tweets by week and language:
+
+    $ hxlcount -t date+week_start,meta+lang tweets.csv > report.csv
+
+Total tweets by week, language, and country:
+
+    $ hxlcount -t date+week_start,meta+lang,country+code tweets.csv > report.csv
 
 # License
 
