@@ -59,6 +59,8 @@ output.writerow([
     'Tweet date',
     'Week starting',
     'Language',
+    'Confidence',
+    'Text',
     'Location string',
     'Country code',
 ])
@@ -67,6 +69,8 @@ output.writerow([
     "#date+posted",
     "#date+week_start",
     "#meta+lang",
+    "#indicator+confidence+num",
+    "#description+tweet",
     "#loc+name",
     "#country+code+v_iso2",
 ])
@@ -82,7 +86,11 @@ for line in sys.stdin:
         logger.info("Read %d tweets (%d skipped)...", total_count, skipped_count)
 
     # parse the JSON
-    record = json.loads(line)
+    try:
+        record = json.loads(line)
+    except:
+        logger.warning("Failed to parse JSON record (possibly incomplete at end of file)")
+
     total_count += 1
 
     # check that we haven't see this already (in this run)
@@ -98,13 +106,15 @@ for line in sys.stdin:
         continue
     
     label = record['aidr']['nominal_labels'][0]['label_code']
+    confidence = record['aidr']['nominal_labels'][0]['confidence']
 
-    # if wrong label
-    if label != 'related_to_education_insecurity':
+    # if wrong label or not confident
+    if label != 'related_to_education_insecurity' or confidence < 0.8:
         skipped_count += 1
         continue
 
     # if we get to here, we have a relevant tweet; grab some fields
+    tweet_text = record['text']
     language_code = record['lang']
     date_object = dateutil.parser.parse(record['created_at'])
     location_string = normalise_whitespace(record['user']['location'])
@@ -120,10 +130,12 @@ for line in sys.stdin:
         format_date(date_object),
         format_date(get_week_start(date_object)),
         language_code,
+        confidence,
+        tweet_text,
         location_string,
         country_code,
     ])
 
 logger.info("Read %d total tweets", total_count)
 if skipped_count > 0:
-    logger.warn("Skipped %d tweets with no label information", skipped_count)
+    logger.warning("Skipped %d tweets with no label information", skipped_count)
