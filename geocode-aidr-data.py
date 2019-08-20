@@ -56,7 +56,7 @@ def geocode_location_string(s):
         g = geocoder.osm(s)
         if g.accuracy is not None and g.accuracy >= ACCURACY_THRESHOLD and g.country_code:
             return g.country_code
-    except Exception as (e):
+    except Exception as e:
         logger.exception(e)
 
     return '' # insufficient accuracy or exception
