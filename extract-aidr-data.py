@@ -12,6 +12,21 @@ import csv, dateutil.parser, dateutil.relativedelta, json, logging, re, sys
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("extract-aidr-data")
 
+
+#
+# Configuration variables (TODO: make into command-line arguments)
+#
+
+CLASSIFIER = 'related_to_education_insecurity'
+""" The classifier we're looking for (discard any tweets that don't match) """
+
+CONFIDENCE_THRESHOLD = 0.9
+""" The minimum confidence threshold (discard any tweets below it) """
+
+INCLUDE_TWEET_TEXT = False
+""" If True, include the tweet text in the output (otherwise, leave blank) """
+
+
 #
 # Utility functions
 #
@@ -109,12 +124,15 @@ for line in sys.stdin:
     confidence = record['aidr']['nominal_labels'][0]['confidence']
 
     # if wrong label or not confident
-    if label != 'related_to_education_insecurity' or confidence < 0.8:
+    if label != CLASSIFIER or confidence < CONFIDENCE_THRESHOLD:
         skipped_count += 1
         continue
 
     # if we get to here, we have a relevant tweet; grab some fields
-    tweet_text = record['text']
+    if INCLUDE_TWEET_TEXT:
+        tweet_text = record['text']
+    else:
+        tweet_text = ""
     language_code = record['lang']
     date_object = dateutil.parser.parse(record['created_at'])
     location_string = normalise_whitespace(record['user']['location'])
@@ -138,4 +156,4 @@ for line in sys.stdin:
 
 logger.info("Read %d total tweets", total_count)
 if skipped_count > 0:
-    logger.warning("Skipped %d tweets with no label information", skipped_count)
+    logger.warning("Skipped %d tweets with no label information or low confidence", skipped_count)
