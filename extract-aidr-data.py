@@ -14,20 +14,6 @@ logger = logging.getLogger("extract-aidr-data")
 
 
 #
-# Configuration variables (TODO: make into command-line arguments)
-#
-
-CLASSIFIER = 'related_to_education_insecurity'
-""" The classifier we're looking for (discard any tweets that don't match) """
-
-CONFIDENCE_THRESHOLD = 0.9
-""" The minimum confidence threshold (discard any tweets below it) """
-
-INCLUDE_TWEET_TEXT = False
-""" If True, include the tweet text in the output (otherwise, leave blank) """
-
-
-#
 # Utility functions
 #
 
@@ -58,102 +44,112 @@ def get_week_start (date_object):
 
 
 #
-# Set up variables for batch processing
+# Main function
 #
+def process_tweets (input=None, output=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False):
+    """ Process the JSON twitter data and produce HXL-hashtagged CSV output.
+    @param input: the input stream to read (defaults to sys.stdin)
+    @param output: the output stream for writing CSV (defaults to sys.stdout)
+    @param classifer: the classifier string from AIDR (defaults to "related_to_education_insecurity")
+    @param threshold: the confidence threshold for relevance (defaults to 0.9, 90%).
+    @param include_text: if True, include the full tweet text (defaults to False).
+    """
 
-output = csv.writer(sys.stdout)
-skipped_count = 0
-total_count = 0
-tweet_ids_seen = set()
-
-#
-# write the CSV header rows (text headers and HXL hashtags)
-#
-
-output.writerow([
-    'Tweet date',
-    'Week starting',
-    'Language',
-    'Confidence',
-    'Text',
-    'Location string',
-    'Country code',
-])
-
-output.writerow([
-    "#date+posted",
-    "#date+week_start",
-    "#meta+lang",
-    "#indicator+confidence+num",
-    "#description+tweet",
-    "#loc+name",
-    "#country+code+v_iso2",
-])
-
-#
-# Iterate over the data (one JSON object on each line)
-#
-
-for line in sys.stdin:
-
-    # progress info in terminal
-    if total_count > 0 and (total_count % 10000) == 0:
-        logger.info("Read %d tweets (%d skipped)...", total_count, skipped_count)
-
-    # parse the JSON
-    try:
-        record = json.loads(line)
-    except:
-        logger.warning("Failed to parse JSON record (possibly incomplete at end of file)")
-
-    total_count += 1
-
-    # check that we haven't see this already (in this run)
-    if record['id'] in tweet_ids_seen:
-        skipped_count += 1
-        continue
-    else:
-        tweet_ids_seen.add(record['id'])
-
-    # If no label info, skip
-    if 'aidr' not in record or 'nominal_labels' not in record['aidr']:
-        skipped_count += 1
-        continue
+    if input is None:
+        input = sys.stdin
+    if output is None:
+        output = sys.stdout
     
-    label = record['aidr']['nominal_labels'][0]['label_code']
-    confidence = record['aidr']['nominal_labels'][0]['confidence']
+    csv_out = csv.writer(output)
+    skipped_count = 0
+    total_count = 0
+    tweet_ids_seen = set()
 
-    # if wrong label or not confident
-    if label != CLASSIFIER or confidence < CONFIDENCE_THRESHOLD:
-        skipped_count += 1
-        continue
-
-    # if we get to here, we have a relevant tweet; grab some fields
-    if INCLUDE_TWEET_TEXT:
-        tweet_text = record['text']
-    else:
-        tweet_text = ""
-    language_code = record['lang']
-    date_object = dateutil.parser.parse(record['created_at'])
-    location_string = normalise_whitespace(record['user']['location'])
-
-    # see if we already have a country code
-    country_code = ''
-    place_object = record.get('place')
-    if place_object is not None:
-        country_code = place_object.get('country_code')
-
-    # write to CSV
-    output.writerow([
-        format_date(date_object),
-        format_date(get_week_start(date_object)),
-        language_code,
-        confidence,
-        tweet_text,
-        location_string,
-        country_code,
+    # write the CSV header rows (text headers and HXL hashtags)
+    csv_out.writerow([
+        'Tweet date',
+        'Week starting',
+        'Language',
+        'Confidence',
+        'Text',
+        'Location string',
+        'Country code',
     ])
 
-logger.info("Read %d total tweets", total_count)
-if skipped_count > 0:
-    logger.warning("Skipped %d tweets with no label information or low confidence", skipped_count)
+    csv_out.writerow([
+        "#date+posted",
+        "#date+week_start",
+        "#meta+lang",
+        "#indicator+confidence+num",
+        "#description+tweet",
+        "#loc+name",
+        "#country+code+v_iso2",
+    ])
+
+    for line in input:
+
+        # progress info in terminal
+        if total_count > 0 and (total_count % 10000) == 0:
+            logger.info("Read %d tweets (%d skipped)...", total_count, skipped_count)
+
+        # parse the JSON
+        try:
+            record = json.loads(line)
+        except:
+            logger.warning("Failed to parse JSON record (possibly incomplete at end of file)")
+
+        total_count += 1
+
+        # check that we haven't see this already (in this run)
+        if record['id'] in tweet_ids_seen:
+            skipped_count += 1
+            continue
+        else:
+            tweet_ids_seen.add(record['id'])
+
+        # If no label info, skip
+        if 'aidr' not in record or 'nominal_labels' not in record['aidr']:
+            skipped_count += 1
+            continue
+
+        label = record['aidr']['nominal_labels'][0]['label_code']
+        confidence = record['aidr']['nominal_labels'][0]['confidence']
+
+        # if wrong label or not confident
+        if label != classifier or confidence < threshold:
+            skipped_count += 1
+            continue
+
+        # if we get to here, we have a relevant tweet; grab some fields
+        if include_text:
+            tweet_text = record['text']
+        else:
+            tweet_text = ""
+        language_code = record['lang']
+        date_object = dateutil.parser.parse(record['created_at'])
+        location_string = normalise_whitespace(record['user']['location'])
+
+        # see if we already have a country code
+        country_code = ''
+        place_object = record.get('place')
+        if place_object is not None:
+            country_code = place_object.get('country_code')
+
+        # write to CSV
+        csv_out.writerow([
+            format_date(date_object),
+            format_date(get_week_start(date_object)),
+            language_code,
+            confidence,
+            tweet_text,
+            location_string,
+            country_code,
+        ])
+
+    logger.info("Read %d total tweets", total_count)
+    if skipped_count > 0:
+        logger.warning("Skipped %d tweets with no label information or low confidence", skipped_count)
+
+
+process_tweets()
+
