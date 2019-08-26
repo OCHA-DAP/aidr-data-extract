@@ -2,17 +2,18 @@
 
 Usage:
 
-    $ cat *.json | python3 extract-aidr-data.py > output.csv
+    $ python3 extract-aidr-data.py -o output.csv -t 0.9 *.json
 
 Started 2019-07-25 by David Megginson
 """
 
-import csv, dateutil.parser, dateutil.relativedelta, json, logging, re, sys
+import argparse, csv, dateutil.parser, dateutil.relativedelta, json, logging, re, sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("extract-aidr-data")
 
 
+
 #
 # Utility functions
 #
@@ -43,54 +44,24 @@ def get_week_start (date_object):
     )
 
 
+
 #
-# Main function
+# JSON processing
 #
-def process_tweets (input=None, output=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False):
-    """ Process the JSON twitter data and produce HXL-hashtagged CSV output.
-    @param input: the input stream to read (defaults to sys.stdin)
-    @param output: the output stream for writing CSV (defaults to sys.stdout)
-    @param classifer: the classifier string from AIDR (defaults to "related_to_education_insecurity")
-    @param threshold: the confidence threshold for relevance (defaults to 0.9, 90%).
-    @param include_text: if True, include the full tweet text (defaults to False).
+
+def process_file (input_stream, csv_out, status):
+    """ Process one input JSON-formatted AIDR file
+    @param input_stream: a bytewise input stream to read from
+    @param csv_out: a CSV writer for output
+    @param status: a simple object with persistent status variables
     """
 
-    if input is None:
-        input = sys.stdin
-    if output is None:
-        output = sys.stdout
-    
-    csv_out = csv.writer(output)
-    skipped_count = 0
-    total_count = 0
-    tweet_ids_seen = set()
-
-    # write the CSV header rows (text headers and HXL hashtags)
-    csv_out.writerow([
-        'Tweet date',
-        'Week starting',
-        'Language',
-        'Confidence',
-        'Text',
-        'Location string',
-        'Country code',
-    ])
-
-    csv_out.writerow([
-        "#date+posted",
-        "#date+week_start",
-        "#meta+lang",
-        "#indicator+confidence+num",
-        "#description+tweet",
-        "#loc+name",
-        "#country+code+v_iso2",
-    ])
-
-    for line in input:
+    # each line contains a JSON object
+    for line in input_stream:
 
         # progress info in terminal
-        if total_count > 0 and (total_count % 10000) == 0:
-            logger.info("Read %d tweets (%d skipped)...", total_count, skipped_count)
+        if status.total_count > 0 and (status.total_count % 10000) == 0:
+            logger.info("Read %d tweets (%d skipped)...", status.total_count, status.skipped_count)
 
         # parse the JSON
         try:
@@ -98,30 +69,30 @@ def process_tweets (input=None, output=None, classifier='related_to_education_in
         except:
             logger.warning("Failed to parse JSON record (possibly incomplete at end of file)")
 
-        total_count += 1
+        status.total_count += 1
 
         # check that we haven't see this already (in this run)
-        if record['id'] in tweet_ids_seen:
-            skipped_count += 1
+        if record['id'] in status.tweet_ids_seen:
+            status.skipped_count += 1
             continue
         else:
-            tweet_ids_seen.add(record['id'])
+            status.tweet_ids_seen.add(record['id'])
 
         # If no label info, skip
         if 'aidr' not in record or 'nominal_labels' not in record['aidr']:
-            skipped_count += 1
+            status.skipped_count += 1
             continue
 
         label = record['aidr']['nominal_labels'][0]['label_code']
         confidence = record['aidr']['nominal_labels'][0]['confidence']
 
         # if wrong label or not confident
-        if label != classifier or confidence < threshold:
-            skipped_count += 1
+        if label != status.classifier or confidence < status.threshold:
+            status.skipped_count += 1
             continue
 
         # if we get to here, we have a relevant tweet; grab some fields
-        if include_text:
+        if status.include_text:
             tweet_text = record['text']
         else:
             tweet_text = ""
@@ -146,10 +117,88 @@ def process_tweets (input=None, output=None, classifier='related_to_education_in
             country_code,
         ])
 
-    logger.info("Read %d total tweets", total_count)
-    if skipped_count > 0:
-        logger.warning("Skipped %d tweets with no label information or low confidence", skipped_count)
+
+def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False):
+    """ Process the JSON twitter data and produce HXL-hashtagged CSV output.
+    @param input_files: a list of input filenames to read (if None, use sys.stdin)
+    @param output: the output filename (if None, default to sys.stdout)
+    @param classifer: the classifier string from AIDR (defaults to "related_to_education_insecurity")
+    @param threshold: the confidence threshold for relevance (defaults to 0.9, 90%).
+    @param include_text: if True, include the full tweet text (defaults to False).
+    """
+
+    # set up a simple class to hold status variables
+    class Struct(object):
+        pass
+    status = Struct()
+    status.classifier = classifier
+    status.threshold = threshold
+    status.include_text = include_text
+    status.total_count = 0
+    status.skipped_count = 0
+    status.tweet_ids_seen = set()
+
+    # output file stays open for the whole run
+    with (open(output_file, "w") if output_file else sys.stdout) as output:
+
+        csv_out = csv.writer(output)
+
+        # write the CSV header rows (text headers and HXL hashtags)
+        csv_out.writerow([
+            'Tweet date',
+            'Week starting',
+            'Language',
+            'Confidence',
+            'Text',
+            'Location string',
+            'Country code',
+        ])
+
+        csv_out.writerow([
+            "#date+posted",
+            "#date+week_start",
+            "#meta+lang",
+            "#indicator+confidence+num",
+            "#description+tweet",
+            "#loc+name",
+            "#country+code+v_iso2",
+        ])
+
+        # Loop through the input files
+        if input_files:
+            # if we have input filenames, walk through the list
+            for filename in input_files:
+                with open(filename, "r") as input:
+                    process_file(input, csv_out, status)
+        else:
+            # otherwise, read from standard input
+            process_file(sys.stdin, csv_out, status)
 
 
-process_tweets()
+        # log an end message
+        logger.info("Read %d total tweets", status.total_count)
+        if status.skipped_count > 0:
+            logger.warning("Skipped %d tweets with no label information or low confidence", status.skipped_count)
 
+
+
+#
+# If called as a command-line script ...
+#
+if __name__ == '__main__':
+    arg_parser = argparse.ArgumentParser(description="Extract AIDR tweet data")
+    arg_parser.add_argument("-i", "--include-text", action="store_true", help="Include the full tweet text in the output")
+    arg_parser.add_argument("-t", "--threshold", type=float, default=0.9, help="Minimum confidence threshold (0.0-1.0)")
+    arg_parser.add_argument("-o", "--output", required=False, help="name of the output file (defaults to standard output)")
+    arg_parser.add_argument("json_file", nargs="*")
+
+    args = arg_parser.parse_args()
+
+    process_tweets(
+        input_files = args.json_file,
+        output_file = args.output,
+        threshold = args.threshold,
+        include_text=args.include_text
+    )
+
+# end
