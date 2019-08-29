@@ -93,7 +93,10 @@ def process_file (input_stream, csv_out, status):
 
         # if we get to here, we have a relevant tweet; grab some fields
         if status.include_text:
-            tweet_text = record['text']
+            if 'extended_tweet' in record:
+                tweet_text = record['extended_tweet']['full_text']
+            else:
+                tweet_text = record['text']
         else:
             tweet_text = ""
         language_code = record['lang']
