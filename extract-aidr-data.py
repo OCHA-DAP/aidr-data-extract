@@ -50,8 +50,8 @@ def geocode (s):
     @returns: an ISO3 country code, or None on failure
     """
     result = ggeocode.coder.code(s, 5)
-    if len(result) == 1:
-        return result[0]
+    if len(result['countries']) == 1:
+        return result['countries'][0]
     else:
         return None
 
