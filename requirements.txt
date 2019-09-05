@@ -1,4 +1,4 @@
-geocoder
+ggeocode
 hxl
 python.dateutil
 

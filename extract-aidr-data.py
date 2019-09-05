@@ -7,7 +7,7 @@ Usage:
 Started 2019-07-25 by David Megginson
 """
 
-import argparse, csv, dateutil.parser, dateutil.relativedelta, json, logging, re, sys
+import argparse, csv, dateutil.parser, dateutil.relativedelta, ggeocode.coder, ggeocode.iso3, json, logging, re, sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("extract-aidr-data")
@@ -101,13 +101,21 @@ def process_file (input_stream, csv_out, status):
             tweet_text = ""
         language_code = record['lang']
         date_object = dateutil.parser.parse(record['created_at'])
-        location_string = normalise_whitespace(record['user']['location'])
+        location_string = record['user']['location']
 
         # see if we already have a country code
         country_code = ''
         place_object = record.get('place')
-        if place_object is not None:
-            country_code = place_object.get('country_code')
+        if place_object:
+            # map to an ISO3 code, or discard if there's no code that corresponds
+            country_code = ggeocode.iso3.MAP.get(place_object.get('country_code').upper())
+
+        # if there's no country code, attempt to geocode
+        if status.geocode_p and not country_code and location_string:
+            result = ggeocode.coder.code(location_string, 5)
+            if len(result) == 1:
+                country_code = result[0]
+            # TODO try key phrases from tweet as well
 
         # write to CSV
         csv_out.writerow([
@@ -121,7 +129,7 @@ def process_file (input_stream, csv_out, status):
         ])
 
 
-def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False):
+def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False, geocode_p=False):
     """ Process the JSON twitter data and produce HXL-hashtagged CSV output.
     @param input_files: a list of input filenames to read (if None, use sys.stdin)
     @param output: the output filename (if None, default to sys.stdout)
@@ -137,6 +145,7 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
     status.classifier = classifier
     status.threshold = threshold
     status.include_text = include_text
+    status.geocode_p = geocode_p
     status.total_count = 0
     status.skipped_count = 0
     status.tweet_ids_seen = set()
@@ -191,17 +200,28 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description="Extract AIDR tweet data")
     arg_parser.add_argument("-i", "--include-text", action="store_true", help="Include the full tweet text in the output")
+    arg_parser.add_argument("-n", "--name-map", required=False, help="Filename of the compiled ggeocode JSON name map (if not included, the script will not geocode locations")
     arg_parser.add_argument("-t", "--threshold", type=float, default=0.9, help="Minimum confidence threshold (0.0-1.0)")
     arg_parser.add_argument("-o", "--output", required=False, help="name of the output file (defaults to standard output)")
     arg_parser.add_argument("json_file", nargs="*")
 
     args = arg_parser.parse_args()
 
+    # If the caller provided a JSON name map, load it and enable geocoding
+    if args.name_map is not None:
+        ggeocode.coder.load_name_map(args.name_map)
+        geocode_p = True
+    else:
+        logger.warn("Not geocoding (--name-map option not specified)")
+        geocode_p = False
+
+    # Process the JSON tweet data
     process_tweets(
         input_files = args.json_file,
         output_file = args.output,
         threshold = args.threshold,
-        include_text=args.include_text
+        include_text=args.include_text,
+        geocode_p=geocode_p
     )
 
 # end
