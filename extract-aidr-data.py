@@ -44,6 +44,18 @@ def get_week_start (date_object):
     )
 
 
+def geocode (s):
+    """ Attempt to geocode a string (3-word window).
+    @param s: the string to geocode
+    @returns: an ISO3 country code, or None on failure
+    """
+    result = ggeocode.coder.code(s, 5)
+    if len(result) == 1:
+        return result[0]
+    else:
+        return None
+
+
 
 #
 # JSON processing
@@ -92,30 +104,34 @@ def process_file (input_stream, csv_out, status):
             continue
 
         # if we get to here, we have a relevant tweet; grab some fields
-        if status.include_text:
-            if 'extended_tweet' in record:
-                tweet_text = record['extended_tweet']['full_text']
-            else:
-                tweet_text = record['text']
+        if record.get('extended_tweet'):
+            tweet_text = record['extended_tweet']['full_text']
         else:
-            tweet_text = ""
+            tweet_text = record['text']
         language_code = record['lang']
         date_object = dateutil.parser.parse(record['created_at'])
         location_string = record['user']['location']
 
         # see if we already have a country code
         country_code = ''
+        location_source = ''
         place_object = record.get('place')
         if place_object:
             # map to an ISO3 code, or discard if there's no code that corresponds
             country_code = ggeocode.iso3.MAP.get(place_object.get('country_code').upper())
+            location_source = "Twitter"
 
-        # if there's no country code, attempt to geocode
+        # if there's no country code, attempt to geocode by user location
         if status.geocode_p and not country_code and location_string:
-            result = ggeocode.coder.code(location_string, 5)
-            if len(result) == 1:
-                country_code = result[0]
-            # TODO try key phrases from tweet as well
+            country_code = geocode(location_string)
+            if country_code:
+                location_source = "User profile"
+
+        # if still not geocoded and the user has so specified, try to geocode by the tweet text
+        if status.geocode_text and not country_code:
+            country_code = geocode(tweet_text)
+            if country_code:
+                location_source = "Tweet text"
 
         # write to CSV
         csv_out.writerow([
@@ -123,19 +139,22 @@ def process_file (input_stream, csv_out, status):
             format_date(get_week_start(date_object)),
             language_code,
             confidence,
-            tweet_text,
+            tweet_text if status.include_text else "",
             location_string,
             country_code,
+            location_source
         ])
 
 
-def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False, geocode_p=False):
+def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False, geocode_p=False, geocode_text=False):
     """ Process the JSON twitter data and produce HXL-hashtagged CSV output.
     @param input_files: a list of input filenames to read (if None, use sys.stdin)
     @param output: the output filename (if None, default to sys.stdout)
     @param classifer: the classifier string from AIDR (defaults to "related_to_education_insecurity")
     @param threshold: the confidence threshold for relevance (defaults to 0.9, 90%).
     @param include_text: if True, include the full tweet text (defaults to False).
+    @param geocode_p: attempt to geocode tweets without location information
+    @param geocode_text: try to geocode the tweet text if geocoding the user profile location fails
     """
 
     # set up a simple class to hold status variables
@@ -146,9 +165,11 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
     status.threshold = threshold
     status.include_text = include_text
     status.geocode_p = geocode_p
+    status.geocode_text = geocode_text
     status.total_count = 0
     status.skipped_count = 0
     status.tweet_ids_seen = set()
+    
 
     # output file stays open for the whole run
     with (open(output_file, "w") if output_file else sys.stdout) as output:
@@ -164,6 +185,7 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
             'Text',
             'Location string',
             'Country code',
+            'Location source',
         ])
 
         csv_out.writerow([
@@ -174,6 +196,7 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
             "#description+tweet",
             "#loc+name",
             "#country+code+v_iso2",
+            "#meta+location_source",
         ])
 
         # Loop through the input files
@@ -203,6 +226,7 @@ if __name__ == '__main__':
     arg_parser.add_argument("-n", "--name-map", required=False, help="Filename of the compiled ggeocode JSON name map (if not included, the script will not geocode locations")
     arg_parser.add_argument("-t", "--threshold", type=float, default=0.9, help="Minimum confidence threshold (0.0-1.0)")
     arg_parser.add_argument("-o", "--output", required=False, help="name of the output file (defaults to standard output)")
+    arg_parser.add_argument("--geocode-text", action="store_true", help="Fall back to the tweet text if geocoding the user location string fails")
     arg_parser.add_argument("json_file", nargs="*")
 
     args = arg_parser.parse_args()
@@ -221,7 +245,8 @@ if __name__ == '__main__':
         output_file = args.output,
         threshold = args.threshold,
         include_text=args.include_text,
-        geocode_p=geocode_p
+        geocode_p=geocode_p,
+        geocode_text=args.geocode_text
     )
 
 # end
