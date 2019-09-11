@@ -103,9 +103,16 @@ def process_file (input_stream, csv_out, status):
             status.skipped_count += 1
             continue
 
+        # skip retweets if requested
+        if status.exclude_retweets and 'retweeted_status' in record:
+            status.skipped_count += 1
+            continue
+
         # if we get to here, we have a relevant tweet; grab some fields
-        if record.get('extended_tweet'):
+        if 'extended_tweet' in record:
             tweet_text = record['extended_tweet']['full_text']
+        elif 'retweeted_status' in record and 'extended_tweet' in record['retweeted_status']:
+            tweet_text = record['retweeted_status']['extended_tweet']
         else:
             tweet_text = record['text']
         language_code = record['lang']
@@ -138,7 +145,7 @@ def process_file (input_stream, csv_out, status):
             format_date(date_object),
             format_date(get_week_start(date_object)),
             language_code,
-            confidence,
+            float(confidence),
             tweet_text if status.include_text else "",
             location_string,
             country_code,
@@ -146,7 +153,7 @@ def process_file (input_stream, csv_out, status):
         ])
 
 
-def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False, geocode_p=False, geocode_text=False):
+def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False, geocode_p=False, geocode_text=False, exclude_retweets=False):
     """ Process the JSON twitter data and produce HXL-hashtagged CSV output.
     @param input_files: a list of input filenames to read (if None, use sys.stdin)
     @param output: the output filename (if None, default to sys.stdout)
@@ -155,6 +162,7 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
     @param include_text: if True, include the full tweet text (defaults to False).
     @param geocode_p: attempt to geocode tweets without location information
     @param geocode_text: try to geocode the tweet text if geocoding the user profile location fails
+    @param exclude_retweets: exclude retweets from the counts
     """
 
     # set up a simple class to hold status variables
@@ -166,6 +174,7 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
     status.include_text = include_text
     status.geocode_p = geocode_p
     status.geocode_text = geocode_text
+    status.exclude_retweets = exclude_retweets
     status.total_count = 0
     status.skipped_count = 0
     status.tweet_ids_seen = set()
@@ -227,6 +236,7 @@ if __name__ == '__main__':
     arg_parser.add_argument("-t", "--threshold", type=float, default=0.9, help="Minimum confidence threshold (0.0-1.0)")
     arg_parser.add_argument("-o", "--output", required=False, help="name of the output file (defaults to standard output)")
     arg_parser.add_argument("--geocode-text", action="store_true", help="Fall back to the tweet text if geocoding the user location string fails")
+    arg_parser.add_argument("-R", "--exclude-retweets", action="store_true", help="Exclude retweets from the output")
     arg_parser.add_argument("json_file", nargs="*")
 
     args = arg_parser.parse_args()
@@ -246,7 +256,8 @@ if __name__ == '__main__':
         threshold = args.threshold,
         include_text=args.include_text,
         geocode_p=geocode_p,
-        geocode_text=args.geocode_text
+        geocode_text=args.geocode_text,
+        exclude_retweets = args.exclude_retweets
     )
 
 # end
