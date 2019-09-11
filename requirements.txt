@@ -1,4 +1,4 @@
-ggeocode
+ggeocode==0.2
 hxl
 python.dateutil
 
