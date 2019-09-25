@@ -12,11 +12,42 @@ import argparse, csv, dateutil.parser, dateutil.relativedelta, ggeocode.coder, g
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("extract-aidr-data")
 
+
+#
+# Global variables
+#
+
+bot_list = set()
+""" List of suspected spambot Twitter accounts (case-normalised) """
+
 
 
 #
 # Utility functions
 #
+
+def load_bot_list(filename):
+    """ Load a list of suspected bot accounts (one per line).
+    Will normalise to lower case, and add leading "@" if needed.
+    @param filename: path to file containing bot list
+    """
+    with open(filename, 'r') as input:
+        for account in input:
+            account = account.strip().lower()
+            if len(account) > 0 and account[0] != "@":
+                account = "@" + account
+            bot_list.add(account)
+            logger.warning("Added account %s to list of suspected spambots", account)
+
+
+def is_bot(account):
+    """ Test whether a Twitter account is a suspected spambot.
+    @param account: account name, including "@" (will be normalised to lower case)
+    @returns: True if a suspected bot
+    """
+    account = "@" + account.lower()
+    return account in bot_list
+
 
 def normalise_whitespace(s):
     """Clean whitespace in a string, and handle None
@@ -29,10 +60,12 @@ def normalise_whitespace(s):
         s = re.sub(r'\s+', ' ', s, flags=re.MULTILINE)
     return s
 
+
 def format_date (date_object):
     """Normalise a date to YYYY-MM-DD (ISO 8601)
     """
     return date_object.strftime("%Y-%m-%d")
+
 
 def get_week_start (date_object):
     """Parse a raw date string and return the start of the week it occurs in
@@ -82,6 +115,12 @@ def process_file (input_stream, csv_out, status):
             logger.warning("Failed to parse JSON record (possibly incomplete at end of file)")
 
         status.total_count += 1
+
+        # check that the poster isn't a suspected spambot
+        if is_bot(record['user']['screen_name']):
+            logger.warning("Skipping suspected spambot account @%s", record['user']['screen_name'])
+            status.skipped_count += 1
+            continue
 
         # check that we haven't see this already (in this run)
         if record['id'] in status.tweet_ids_seen:
@@ -237,16 +276,21 @@ if __name__ == '__main__':
     arg_parser.add_argument("-o", "--output", required=False, help="name of the output file (defaults to standard output)")
     arg_parser.add_argument("--geocode-text", action="store_true", help="Fall back to the tweet text if geocoding the user location string fails")
     arg_parser.add_argument("-R", "--exclude-retweets", action="store_true", help="Exclude retweets from the output")
+    arg_parser.add_argument("-b", "--bot-list", required=False, help="file containing suspected Twitter bot accounts to exclude (one per line, case-insensitive")
     arg_parser.add_argument("json_file", nargs="*")
 
     args = arg_parser.parse_args()
+
+    # If the caller provided a list of spambot accounts, load it
+    if args.bot_list is not None:
+        load_bot_list(args.bot_list)
 
     # If the caller provided a JSON name map, load it and enable geocoding
     if args.name_map is not None:
         ggeocode.coder.load_name_map(args.name_map)
         geocode_p = True
     else:
-        logger.warn("Not geocoding (--name-map option not specified)")
+        logger.warning("Not geocoding (--name-map option not specified)")
         geocode_p = False
 
     # Process the JSON tweet data
