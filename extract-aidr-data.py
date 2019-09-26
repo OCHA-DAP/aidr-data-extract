@@ -78,12 +78,13 @@ def get_week_start (date_object):
 
 
 def geocode (s):
-    """ Attempt to geocode a string (3-word window).
+    """ Attempt to geocode a string (5-word window).
     @param s: the string to geocode
     @returns: an ISO3 country code, or None on failure
     """
     result = ggeocode.coder.code(s, 5)
-    if len(result['countries']) == 1:
+    logger.debug(result)
+    if result['status'] and len(result['countries']) == 1:
         return result['countries'][0]
     else:
         return None
