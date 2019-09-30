@@ -77,14 +77,15 @@ def get_week_start (date_object):
     )
 
 
-def geocode (s):
+def geocode (s, min_score=1):
     """ Attempt to geocode a string (5-word window).
     @param s: the string to geocode
+    @param min_score: minimum score to accept from ggeocode (default: 1)
     @returns: an ISO3 country code, or None on failure
     """
     result = ggeocode.coder.code(s, 5)
     logger.debug(result)
-    if result['status'] and len(result['countries']) == 1:
+    if result['status'] and result['score'] >= min_score and len(result['countries']) == 1:
         return result['countries'][0]
     else:
         return None
