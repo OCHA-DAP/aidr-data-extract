@@ -20,6 +20,9 @@ logger = logging.getLogger("extract-aidr-data")
 bot_list = set()
 """ List of suspected spambot Twitter accounts (case-normalised) """
 
+tweets_seen = set()
+""" Set of tweet text seen, to filter out exact duplicates """
+
 
 
 #
@@ -120,7 +123,7 @@ def process_file (input_stream, csv_out, status):
 
         # check that the poster isn't a suspected spambot
         if is_bot(record['user']['screen_name']):
-            logger.warning("Skipping suspected spambot account @%s", record['user']['screen_name'])
+            logger.debug("Skipping suspected spambot account @%s", record['user']['screen_name'])
             status.skipped_count += 1
             continue
 
@@ -138,11 +141,25 @@ def process_file (input_stream, csv_out, status):
 
         label = record['aidr']['nominal_labels'][0]['label_code']
         confidence = record['aidr']['nominal_labels'][0]['confidence']
+        if 'extended_tweet' in record:
+            tweet_text = record['extended_tweet']['full_text']
+        elif 'retweeted_status' in record and 'extended_tweet' in record['retweeted_status']:
+            tweet_text = record['retweeted_status']['extended_tweet']['full_text']
+        else:
+            tweet_text = record['text']
 
         # if wrong label or not confident
         if label != status.classifier or confidence < status.threshold:
             status.skipped_count += 1
             continue
+
+        # skip duplicates if requested
+        if status.exclude_duplicates:
+            if tweet_text in tweets_seen:
+                status.skipped_count += 1
+                continue
+            else:
+                tweets_seen.add(tweet_text)
 
         # skip retweets if requested
         if status.exclude_retweets and 'retweeted_status' in record:
@@ -150,12 +167,6 @@ def process_file (input_stream, csv_out, status):
             continue
 
         # if we get to here, we have a relevant tweet; grab some fields
-        if 'extended_tweet' in record:
-            tweet_text = record['extended_tweet']['full_text']
-        elif 'retweeted_status' in record and 'extended_tweet' in record['retweeted_status']:
-            tweet_text = record['retweeted_status']['extended_tweet']
-        else:
-            tweet_text = record['text']
         language_code = record['lang']
         date_object = dateutil.parser.parse(record['created_at'])
         location_string = record['user']['location']
@@ -194,7 +205,11 @@ def process_file (input_stream, csv_out, status):
         ])
 
 
-def process_tweets (input_files=None, output_file=None, classifier='related_to_education_insecurity', threshold=0.9, include_text=False, geocode_p=False, geocode_text=False, exclude_retweets=False):
+def process_tweets (
+        input_files=None, output_file=None, classifier='related_to_education_insecurity',
+        threshold=0.9, include_text=False, geocode_p=False, geocode_text=False,
+        exclude_retweets=False, exclude_duplicates=False
+):
     """ Process the JSON twitter data and produce HXL-hashtagged CSV output.
     @param input_files: a list of input filenames to read (if None, use sys.stdin)
     @param output: the output filename (if None, default to sys.stdout)
@@ -216,6 +231,7 @@ def process_tweets (input_files=None, output_file=None, classifier='related_to_e
     status.geocode_p = geocode_p
     status.geocode_text = geocode_text
     status.exclude_retweets = exclude_retweets
+    status.exclude_duplicates = exclude_duplicates
     status.total_count = 0
     status.skipped_count = 0
     status.tweet_ids_seen = set()
@@ -274,6 +290,7 @@ if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description="Extract AIDR tweet data")
     arg_parser.add_argument("-i", "--include-text", action="store_true", help="Include the full tweet text in the output")
     arg_parser.add_argument("-n", "--name-map", required=False, help="Filename of the compiled ggeocode JSON name map (if not included, the script will not geocode locations")
+    arg_parser.add_argument("-D", "--exclude-duplicates", action="store_true", help="Filter out tweets with exact duplicate text")
     arg_parser.add_argument("-t", "--threshold", type=float, default=0.9, help="Minimum confidence threshold (0.0-1.0)")
     arg_parser.add_argument("-o", "--output", required=False, help="name of the output file (defaults to standard output)")
     arg_parser.add_argument("--geocode-text", action="store_true", help="Fall back to the tweet text if geocoding the user location string fails")
@@ -303,7 +320,8 @@ if __name__ == '__main__':
         include_text=args.include_text,
         geocode_p=geocode_p,
         geocode_text=args.geocode_text,
-        exclude_retweets = args.exclude_retweets
+        exclude_retweets = args.exclude_retweets,
+        exclude_duplicates = args.exclude_duplicates
     )
 
 # end

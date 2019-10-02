@@ -42,7 +42,7 @@ for lang in ar en fr; do
     global_report="reports/$today-report-global-$lang.csv"
     country_report="reports/$today-report-countries-$lang.csv"
     echo Generating $tweets ... \
-        && python extract-aidr-data.py -R -n "$names" -b "$bots" -t "$threshold" -o "$tweets" aidr-data/$lang/*.json \
+        && python extract-aidr-data.py -D -R -n "$names" -b "$bots" -t "$threshold" -o "$tweets" aidr-data/$lang/*.json \
         && echo Generating $global_report ... \
         && hxlcount -t date+week_start,date+posted,meta+lang $tweets > $global_report \
         && echo Generating $country_report ... \
