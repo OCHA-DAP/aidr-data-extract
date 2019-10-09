@@ -22,8 +22,8 @@ threshold=0.9
 # Approximate sample size
 sample_size=100
 
-# Precompiled ggeocode database for geocoding
-names=./inputs/name-country-map.lines.json
+# Precompiled ggeocode database for geocoding (not used right now)
+# names=./inputs/name-country-map.lines.json
 
 # Spambot account list
 bots=./inputs/spambots.txt
@@ -38,7 +38,8 @@ echo "Making samples for week starting $target_week" >&2
 for lang in ar en fr; do
     output=reports/$today-qa-sample-$lang.csv
     echo Generating $lang in $output ... >&2
-    python extract-aidr-data.py -D -R -i -n "$names" -b "$bots" -t "$threshold" aidr-data/$lang/*.json \
+    python extract-aidr-data.py -D -R -i -b "$bots" -t "$threshold" aidr-data/$lang/*.json \
         | hxlselect -q date+week_start=$target_week \
+        | hxlcut -i description+tweet \
         | python make-sample.py "$sample_size" > "$output"
 done
