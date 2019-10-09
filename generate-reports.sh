@@ -25,7 +25,7 @@ today=$(date +%Y%m%d)
 
 # Since this week is possibly incomplete, we want only tweets from
 # weeks starting before the most-recent Sunday.
-this_week_start=$(date +%Y%m%d -d 'last Sunday')
+this_week_start=$(date +%Y-%m-%d -d 'last Sunday')
 
 # Minimum AIDR tweet-classification certainty (0.00-1.00)
 threshold=0.9
