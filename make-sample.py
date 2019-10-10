@@ -27,6 +27,6 @@ n_rows = 0
 for row in data:
     n_rows = n_rows + 1
 
-sample_rate = float(sample_size) / float(n_rows)
+sample_rate = float(sample_size*1.2) / float(n_rows) # add a 20% fudge factor
 
 hxl.write_hxl(sys.stdout, SampleFilter(data, sample_rate))
