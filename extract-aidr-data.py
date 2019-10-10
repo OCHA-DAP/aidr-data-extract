@@ -63,6 +63,9 @@ def normalise_whitespace(s):
         s = re.sub(r'\s+', ' ', s, flags=re.MULTILINE)
     return s
 
+def normalise_text(s):
+    """Normalise text for duplicate detection"""
+    return ' '.join(re.split(r'[^\w#_]+', s)).strip().lower()
 
 def format_date (date_object):
     """Normalise a date to YYYY-MM-DD (ISO 8601)
@@ -148,21 +151,31 @@ def process_file (input_stream, csv_out, status):
         else:
             tweet_text = record['text']
 
-        # if wrong label or not confident
-        if label != status.classifier or confidence < status.threshold:
+        # skip wrong classifier
+        if label != status.classifier:
+            logger.debug("Skipped tweet classifed %s: %s", label, tweet_text)
+            status.skipped_count += 1
+            continue
+
+        # skip low confidence
+        if confidence < status.threshold:
+            logger.debug("Skipped tweet with confidence %f", confidence)
             status.skipped_count += 1
             continue
 
         # skip duplicates if requested
         if status.exclude_duplicates:
-            if tweet_text in tweets_seen:
+            normalised = normalise_text(tweet_text)
+            if normalised in tweets_seen:
+                logger.debug("Skipped duplicate tweet: %s", tweet_text)
                 status.skipped_count += 1
                 continue
             else:
-                tweets_seen.add(tweet_text)
+                tweets_seen.add(normalised)
 
         # skip retweets if requested
         if status.exclude_retweets and 'retweeted_status' in record:
+            logger.debug("Skipped retweet: %s", tweet_text)
             status.skipped_count += 1
             continue
 
