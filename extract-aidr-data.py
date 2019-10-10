@@ -65,7 +65,7 @@ def normalise_whitespace(s):
 
 def normalise_text(s):
     """Normalise text for duplicate detection"""
-    return ' '.join(re.split(r'[^\w#_]+', s)).strip().lower()
+    return ' '.join(re.split(r'\W+', s)).strip().lower()
 
 def format_date (date_object):
     """Normalise a date to YYYY-MM-DD (ISO 8601)
