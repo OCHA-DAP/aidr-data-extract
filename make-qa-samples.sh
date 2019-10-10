@@ -20,7 +20,7 @@ today=$(date +%Y%m%d)
 threshold=0.9
 
 # Approximate sample size
-sample_size=100
+sample_size=50
 
 # Precompiled ggeocode database for geocoding (not used right now)
 # names=./inputs/name-country-map.lines.json
