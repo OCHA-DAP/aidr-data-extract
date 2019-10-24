@@ -23,6 +23,10 @@ bot_list = set()
 tweets_seen = set()
 """ Set of tweet text seen, to filter out exact duplicates """
 
+url_regex = re.compile(
+    r'\bhttps?://[/?&%=@a-z0-9_.~-]+\b',
+    re.IGNORECASE
+)
 
 
 #
@@ -65,6 +69,12 @@ def normalise_whitespace(s):
 
 def normalise_text(s):
     """Normalise text for duplicate detection"""
+
+    # simplistic pattern for URLs (doesn't have to be perfect)
+    # the goal is to filter out duplicate spam messages that differ only in the URL
+    s = re.sub(r'\bhttps?://[/?&%=@a-z0-9_.~-]+\b', ' URL ', s, flags=re.I)
+
+    # remove all non-
     return ' '.join(re.split(r'\W+', s)).strip().lower()
 
 def format_date (date_object):
@@ -81,7 +91,6 @@ def get_week_start (date_object):
         date_object,
         weekday = dateutil.relativedelta.SU(-1)
     )
-
 
 def geocode (s, min_score=1):
     """ Attempt to geocode a string (5-word window).
