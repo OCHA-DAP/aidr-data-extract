@@ -52,7 +52,10 @@ def process_record (record, csvout, args):
 
 def process_input_stream (input_stream, csvout, args):
     for line in input_stream:
-        process_record(json.loads(line), csvout, args)
+        try:
+            process_record(json.loads(line), csvout, args)
+        except:
+            logger.warning("JSON parsing failure; skipping record")
 
 def process (output_stream, args):
     csvout = csv.writer(output_stream)

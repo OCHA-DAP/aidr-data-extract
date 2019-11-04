@@ -28,7 +28,7 @@ today=$(date +%Y%m%d)
 this_week_start=$(date +%Y-%m-%d -d 'last Sunday')
 
 # Minimum AIDR tweet-classification certainty (0.00-1.00)
-threshold=0.9
+threshold=0.8
 
 # Precompiled ggeocode database for geocoding
 names=./inputs/name-country-map.lines.json
@@ -36,13 +36,16 @@ names=./inputs/name-country-map.lines.json
 # Spambot account list
 bots=./inputs/spambots.txt
 
+# Allowed countries list
+countries=./inputs/countries.txt
+
 # Extract the data on individual tweets in each language
 for lang in ar en fr; do
     tweets="output/$today-tweets-$lang.csv"
     global_report="reports/$today-report-global-$lang.csv"
     country_report="reports/$today-report-countries-$lang.csv"
     echo Generating $tweets ... \
-        && python extract-aidr-data.py -D -R -n "$names" -b "$bots" -t "$threshold" -o "$tweets" aidr-data/$lang/*.json \
+        && python extract-aidr-data.py -D -R -n "$names" -b "$bots" -C "$countries" -t "$threshold" -o "$tweets" aidr-data/$lang/*.json \
         && echo Generating $global_report ... \
         && hxlcount -t date+week_start,date+posted,meta+lang $tweets > $global_report \
         && echo Generating $country_report ... \

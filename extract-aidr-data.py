@@ -18,15 +18,14 @@ logger = logging.getLogger("extract-aidr-data")
 #
 
 bot_list = set()
-""" List of suspected spambot Twitter accounts (case-normalised) """
+""" Blacklist of suspected spambot Twitter accounts (case-normalised) """
+
+country_list = set()
+""" Whitelist of ISO3 codes for allowed countries (if none, include all countries) """
 
 tweets_seen = set()
 """ Set of tweet text seen, to filter out exact duplicates """
 
-url_regex = re.compile(
-    r'\bhttps?://[/?&%=@a-z0-9_.~-]+\b',
-    re.IGNORECASE
-)
 
 
 #
@@ -44,8 +43,19 @@ def load_bot_list(filename):
             if len(account) > 0 and account[0] != "@":
                 account = "@" + account
             bot_list.add(account)
-            logger.warning("Added account %s to list of suspected spambots", account)
+            logger.debug("Added account %s to list of suspected spambots", account)
 
+            
+def load_country_list(filename):
+    """ Load a list of ISO3 codes for allowed countries (one per line).
+    Will normalise to upper case.
+    @param filename: path to file containing country-code list
+    """
+    with open(filename, 'r') as input:
+        for iso3 in input:
+            iso3 = iso3.strip().upper()
+            country_list.add(iso3)
+            logger.debug("Added country %s to whitelist", iso3)
 
 def is_bot(account):
     """ Test whether a Twitter account is a suspected spambot.
@@ -54,6 +64,19 @@ def is_bot(account):
     """
     account = "@" + account.lower()
     return account in bot_list
+
+
+def is_country_allowed(iso3):
+    """ Test whether a country should be included.
+    If there's no country whitelist, then all countries pass.
+    Otherwise, the ISO3 code must appear in the whitelist.
+    @param iso3: the ISO3 code in upper case
+    @returns: True if the country should be included
+    """
+    if len(country_list) == 0:
+        return True
+    else:
+        return iso3 in country_list
 
 
 def normalise_whitespace(s):
@@ -67,6 +90,7 @@ def normalise_whitespace(s):
         s = re.sub(r'\s+', ' ', s, flags=re.MULTILINE)
     return s
 
+
 def normalise_text(s):
     """Normalise text for duplicate detection"""
 
@@ -74,8 +98,13 @@ def normalise_text(s):
     # the goal is to filter out duplicate spam messages that differ only in the URL
     s = re.sub(r'\bhttps?://[/?&%=@a-z0-9_.~-]+\b', ' URL ', s, flags=re.I)
 
-    # remove all non-
+    # simplistic pattern for user tags (doesn't have to be perfect)
+    # the goal is to filter out
+    s = re.sub(r'\b@[a-z0-9_]+\b', ' USER ', s, flags=re.I)
+
+    # remove all non-word characters
     return ' '.join(re.split(r'\W+', s)).strip().lower()
+
 
 def format_date (date_object):
     """Normalise a date to YYYY-MM-DD (ISO 8601)
@@ -214,6 +243,11 @@ def process_file (input_stream, csv_out, status):
             if country_code:
                 location_source = "Tweet text"
 
+        if not is_country_allowed(country_code):
+            logger.debug("Skipped tweet from %s", country_code)
+            status.skipped_count += 1
+            continue
+
         # write to CSV
         csv_out.writerow([
             format_date(date_object),
@@ -318,6 +352,7 @@ if __name__ == '__main__':
     arg_parser.add_argument("--geocode-text", action="store_true", help="Fall back to the tweet text if geocoding the user location string fails")
     arg_parser.add_argument("-R", "--exclude-retweets", action="store_true", help="Exclude retweets from the output")
     arg_parser.add_argument("-b", "--bot-list", required=False, help="file containing suspected Twitter bot accounts to exclude (one per line, case-insensitive")
+    arg_parser.add_argument("-C", "--include-countries", required=False, help="file listing ISO3 codes for countries to include (one per line, case-insensitive). If not specified, include all countries.")
     arg_parser.add_argument("json_file", nargs="*")
 
     args = arg_parser.parse_args()
@@ -325,6 +360,15 @@ if __name__ == '__main__':
     # If the caller provided a list of spambot accounts, load it
     if args.bot_list is not None:
         load_bot_list(args.bot_list)
+        logger.info("Loaded Twitter spambot blacklist from %s", args.bot_list)
+
+    # If the caller provider a whitelist of countries, load it
+    if args.include_countries is not None:
+        if args.name_map is None:
+            logger.error("Must specify --name-map with --include-countries")
+            sys.exit(2)
+        load_country_list(args.include_countries)
+        logger.info("Loaded list of allowed ISO3 country codes from %s", args.include_countries)
 
     # If the caller provided a JSON name map, load it and enable geocoding
     if args.name_map is not None:
