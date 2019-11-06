@@ -106,10 +106,13 @@ def normalise_text(s):
     return ' '.join(re.split(r'\W+', s)).strip().lower()
 
 
-def format_date (date_object):
+def format_date (date_object, month_only=False):
     """Normalise a date to YYYY-MM-DD (ISO 8601)
     """
-    return date_object.strftime("%Y-%m-%d")
+    if month_only:
+        return date_object.strftime("%Y-%m")
+    else:
+        return date_object.strftime("%Y-%m-%d")
 
 
 def get_week_start (date_object):
@@ -251,6 +254,7 @@ def process_file (input_stream, csv_out, status):
         # write to CSV
         csv_out.writerow([
             format_date(date_object),
+            format_date(date_object, True),
             format_date(get_week_start(date_object)),
             language_code,
             float(confidence),
@@ -301,6 +305,7 @@ def process_tweets (
         # write the CSV header rows (text headers and HXL hashtags)
         csv_out.writerow([
             'Tweet date',
+            'Month',
             'Week starting',
             'Language',
             'Confidence',
@@ -312,6 +317,7 @@ def process_tweets (
 
         csv_out.writerow([
             "#date+posted",
+            "#date+month",
             "#date+week_start",
             "#meta+lang",
             "#indicator+confidence+num",

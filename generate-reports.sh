@@ -27,6 +27,9 @@ today=$(date +%Y%m%d)
 # weeks starting before the most-recent Sunday.
 this_week_start=$(date +%Y-%m-%d -d 'last Sunday')
 
+# Ditto for this month
+this_month=$(date +%Y-%m)
+
 # Minimum AIDR tweet-classification certainty (0.00-1.00)
 threshold=0.8
 
@@ -39,32 +42,67 @@ bots=./inputs/spambots.txt
 # Allowed countries list
 countries=./inputs/countries.txt
 
+# Segment replacement table
+segments=./inputs/segment-replacement-table.csv
+
+# Languages we're covering
+languages="ar en fr"
+
+# Output template for merging files
+template=inputs/tweets-template.csv
+
+# append spec for hxlappend (will add to it)
+append_spec=
+
 # Extract the data on individual tweets in each language
-for lang in ar en fr; do
+for lang in $languages; do
+
+    # Extract
     tweets="output/$today-tweets-$lang.csv"
-    global_report="reports/$today-report-global-$lang.csv"
-    country_report="reports/$today-report-countries-$lang.csv"
     echo Generating $tweets ... \
-        && python extract-aidr-data.py -D -R -n "$names" -b "$bots" -C "$countries" -t "$threshold" -o "$tweets" aidr-data/$lang/*.json \
-        && echo Generating $global_report ... \
-        && hxlcount -t date+week_start,date+posted,meta+lang $tweets > $global_report \
-        && echo Generating $country_report ... \
-        && hxlcount -t date+week_start,date+posted,meta+lang,country+code $tweets > $country_report
+        && python extract-aidr-data.py -i -D -R -n "$names" -b "$bots" -C "$countries" -t "$threshold" -o "$tweets" aidr-data/$lang/*.json
+
+    # Update the merge template with an empty dataset (no rows match query, but we get the headers)
+    echo Updating $template
+    hxlselect -q 'xxx=yyy!!zzz' $tweets > $template
+
+    # Add to the append spec
+    append_spec="$append_spec -a $tweets"
 done
 
-# Generate the global tweet counts by date
-report="reports/$today-report-global-all.csv"
+# Join all the output files together
+all_tweets="output/$today-tweets-all.csv"
+echo "Merging language files into $all_tweets..." \
+    && hxlappend $append_spec $template \
+       | hxlsort -t 'date+posted,meta+lang' \
+       > "output/$today-tweets-all.csv"
 
-echo Generating $report
-hxlappend -a reports/$today-report-global-ar.csv -a reports/$today-report-global-fr.csv reports/$today-report-global-en.csv  \
-    | hxlcount -q "date+week_start<$this_week_start" -t date+week_start,meta+lang -a 'sum(#meta+count) as Tweets#indicator+tweets' > $report
+# Make reports
 
-# Generate the country tweet counts by date
-report="reports/$today-report-countries-all.csv"
+function make_report {
+    report="reports/$today-$2-$3-$4.csv"
+    if [ "X$4" = "Xweekly" ]; then
+        filter="date+week_start<$this_week_start"
+    else
+        filter="date+month<$this_month"
+    fi
+    echo "Generating $report..."
+    hxlcount -q "$filter" -t "$1" "$all_tweets" \
+        | hxladd -s 'Segment#indicator+count_segment={{#meta+count}}' \
+        | hxlreplace -m "$segments" \
+                     > $report
+}
 
-echo Generating $report
-hxlappend -a reports/$today-report-countries-ar.csv -a reports/$today-report-countries-fr.csv reports/$today-report-countries-en.csv  \
-    | hxlcount -q "date+week_start<$this_week_start" -t date+week_start,meta+lang,country+code -a 'sum(#meta+count) as Tweets#indicator+tweets' > $report
+echo "Generating monthly reports..."
+make_report date+month global all monthly
+make_report date+month,country+code countries all monthly
+make_report date+month,country+code,meta+lang countries languages monthly
+
+echo "Generating weekly reports..."
+make_report date+week_start global all weekly
+make_report date+week_start,country+code countries all weekly
+make_report date+week_start,country+code,meta+lang countries languages weekly
+
 
 exit 0
 # end

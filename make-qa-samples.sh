@@ -17,7 +17,7 @@
 today=$(date +%Y%m%d)
 
 # Minimum AIDR tweet-classification certainty (0.00-1.00)
-threshold=0.9
+threshold=0.8
 
 # Approximate sample size
 sample_size=50
@@ -27,6 +27,12 @@ sample_size=50
 
 # Spambot account list
 bots=./inputs/spambots.txt
+
+# Precompiled ggeocode database for geocoding
+names=./inputs/name-country-map.lines.json
+
+# Allowed countries list
+countries=./inputs/countries.txt
 
 # Target week start
 target_week=$(date +%Y-%m-%d -d "$(date -d 'last Sunday') -1 week")
@@ -38,8 +44,8 @@ echo "Making samples for week starting $target_week" >&2
 for lang in ar en fr; do
     output=reports/$today-qa-sample-$lang.csv
     echo Generating $lang in $output ... >&2
-    python extract-aidr-data.py -D -R -i -b "$bots" -t "$threshold" aidr-data/$lang/*.json \
+    python extract-aidr-data.py -D -R -i -n "$names" -b "$bots" -C "$countries" -t "$threshold" aidr-data/$lang/*.json \
         | hxlselect -q date+week_start=$target_week \
-        | hxlcut -i description+tweet \
+        | hxlcut -i description+tweet,loc+name,country+code \
         | python make-sample.py "$sample_size" > "$output"
 done
