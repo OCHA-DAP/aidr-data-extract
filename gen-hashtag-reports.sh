@@ -1,14 +1,6 @@
 #!/bin/bash
 ########################################################################
-# Generate reports from the AIDR JSON files.
-#
-# JSON files must be in the following subdirectories:
-#
-# ./aidr-data/ar/
-# ./aidr-data/en/
-# ./aidr-data/fr/
-#
-# Expecting a Python virtual environment in $HOME/.virtualenvs/aidr/
+# Generate reports from the AIDR JSON files for hashtag campaigns.
 #
 # Expecting a ggeocode names database in
 # ./inputs/name-country-map.lines.json
@@ -39,61 +31,28 @@ names=./inputs/name-country-map.lines.json
 # Spambot account list
 bots=./inputs/spambots.txt
 
-# Phrases to ignore
-stoplist=./inputs/stoplist.txt
-
-# Allowed countries list
-countries=./inputs/countries.txt
-
 # Segment replacement table
 segments=./inputs/segment-replacement-table.csv
 
-# Languages we're covering
-languages="ar en fr"
+# Extract the data 
+FILES=$(ls aidr-data/hashtag-campaigns/all-languages/*.json)
 
-# Output template for merging files
-template=inputs/tweets-template.csv
-
-# append spec for hxlappend (will add to it)
-append_spec=
-
-# Extract the data on individual tweets in each language
-for lang in $languages; do
-
-    FILES1=$(ls aidr-data/education-insecurity-redo/$lang/*.json)
-    FILES2=$(ls aidr-data/education-insecurity/$lang/*.json | grep -v _20190)
-
-    # Extract
-    tweets="output/$today-tweets-$lang.csv"
-    echo Generating $tweets ... \
-        && python extract-aidr-data.py -i -D -R -n "$names" -S "$stoplist" -b "$bots" -C "$countries" -t "$threshold" -o "$tweets" $FILES1 $FILES2
-
-    # Update the merge template with an empty dataset (no rows match query, but we get the headers)
-    echo Updating $template
-    hxlselect -q 'xxx=yyy!!zzz' $tweets > $template
-
-    # Add to the append spec
-    append_spec="$append_spec -a $tweets"
-done
-
-# Join all the output files together
-all_tweets="output/$today-tweets-all.csv"
-echo "Merging language files into $all_tweets..." \
-    && hxlappend $append_spec $template \
-       | hxlsort -t 'date+posted,meta+lang' \
-       > "output/$today-tweets-all.csv"
+# Extract
+tweets="output/$today-tweets-hashtags.csv"
+echo Generating $tweets ... \
+    && python extract-aidr-data.py -i -D -R -n "$names" -b "$bots" -t "$threshold" -o "$tweets" $FILES
 
 # Make reports
 
 function make_report {
-    report="reports/$today-$2-$3-$4.csv"
+    report="reports/$today-hashtags-$2-$3-$4.csv"
     if [ "X$4" = "Xweekly" ]; then
         filter="date+week_start<$this_week_start"
     else
         filter="date+month<$this_month"
     fi
     echo "Generating $report..."
-    hxlcount -q "$filter" -t "$1" "$all_tweets" \
+    hxlcount -q "$filter" -t "$1" "$tweets" \
         | hxladd -s 'Segment#indicator+count_segment={{#meta+count}}' \
         | hxlreplace -m "$segments" \
                      > $report

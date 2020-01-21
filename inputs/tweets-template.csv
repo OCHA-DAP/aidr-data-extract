@@ -1,2 +1,0 @@
-Tweet date,Month,Week starting,Language,Confidence,Text,Location string,Country code,Location source
-#date+posted,#date+month,#date+week_start,#meta+lang,#indicator+confidence+num,#description+tweet,#loc+name,#country+code+v_iso2,#meta+location_source

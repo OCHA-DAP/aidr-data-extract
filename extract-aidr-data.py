@@ -357,6 +357,7 @@ if __name__ == '__main__':
     arg_parser.add_argument("-o", "--output", required=False, help="name of the output file (defaults to standard output)")
     arg_parser.add_argument("--geocode-text", action="store_true", help="Fall back to the tweet text if geocoding the user location string fails")
     arg_parser.add_argument("-R", "--exclude-retweets", action="store_true", help="Exclude retweets from the output")
+    arg_parser.add_argument("-S", "--stoplist", required=False, help="file containing phrases to ignore (one per line, case-insensitive)")
     arg_parser.add_argument("-b", "--bot-list", required=False, help="file containing suspected Twitter bot accounts to exclude (one per line, case-insensitive")
     arg_parser.add_argument("-C", "--include-countries", required=False, help="file listing ISO3 codes for countries to include (one per line, case-insensitive). If not specified, include all countries.")
     arg_parser.add_argument("json_file", nargs="*")
@@ -367,6 +368,11 @@ if __name__ == '__main__':
     if args.bot_list is not None:
         load_bot_list(args.bot_list)
         logger.info("Loaded Twitter spambot blacklist from %s", args.bot_list)
+
+    # If the caller provided a stoplist, load it
+    if args.stoplist is not None:
+        ggeocode.coder.load_stoplist(args.stoplist)
+        logger.info("Loaded stoplist from %s", args.stoplist)
 
     # If the caller provider a whitelist of countries, load it
     if args.include_countries is not None:

@@ -20,7 +20,7 @@ today=$(date +%Y%m%d)
 threshold=0.8
 
 # Approximate sample size
-sample_size=50
+sample_size=500
 
 # Precompiled ggeocode database for geocoding (not used right now)
 # names=./inputs/name-country-map.lines.json
@@ -45,7 +45,6 @@ for lang in ar en fr; do
     output=reports/$today-qa-sample-$lang.csv
     echo Generating $lang in $output ... >&2
     python extract-aidr-data.py -D -R -i -n "$names" -b "$bots" -C "$countries" -t "$threshold" aidr-data/$lang/*.json \
-        | hxlselect -q date+week_start=$target_week \
-        | hxlcut -i description+tweet,loc+name,country+code \
+        | hxlcut -i description+tweet,loc+name,country+code,meta+location_source \
         | python make-sample.py "$sample_size" > "$output"
 done
