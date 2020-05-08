@@ -323,7 +323,7 @@ def process_tweets (
             "#indicator+confidence+num",
             "#description+tweet",
             "#loc+name",
-            "#country+code+v_iso2",
+            "#country+code+v_iso3",
             "#meta+location_source",
         ])
 
